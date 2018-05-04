@@ -12,6 +12,74 @@ class ImageProcessor():
         calibration_data = cc.load_calibration_data(file_path = calibration_data_file)
         self.mtx = calibration_data['mtx']
         self.dist = calibration_data['dist']
+        self.sobel_kernel = 15
+        self.x_thresh = [20, 100]
+        self.y_thresh = [35, 100]
+        self.r_thresh = [200, 255]
+        self.s_thresh = [100, 255]
+        self.l_thresh = [200, 255]
+
+    def _sobel(self, img, orient = 'x', sobel_kernel = 3):
+        gray_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+        # Take the derivative in x or y given orient = 'x' or 'y'
+        if orient == 'x':
+            sobel = cv2.Sobel(gray_img, cv2.CV_64F, 1, 0, ksize = sobel_kernel)
+        else:
+            sobel = cv2.Sobel(gray_img, cv2.CV_64F, 0, 1, ksize = sobel_kernel)
+        
+        return sobel
+
+    def _apply_thresh(self, ch, thresh = [0, 255]):
+        result = np.zeros_like(ch)
+        result[(ch >= thresh[0]) & (ch <= thresh[1])] = 1
+        return result
+
+    def sobel_abs_thresh(self, sobel, thresh=[0,255]):
+        # Take the absolute value of the derivative or gradient
+        abs_sobel = np.absolute(sobel)
+        # Scale to 8-bit (0 - 255) then convert to type = np.uint8
+        scaled_sobel = np.uint8(255 * abs_sobel / np.max(abs_sobel))
+        binary_output = self._apply_thresh(scaled_sobel, thresh)
+
+        return binary_output
+
+    def sobel_mag_thresh(self, sobel_x, sobel_y, thresh=(0, 255)):
+        # Calculate the magnitude 
+        abs_sobel = np.sqrt(sobel_x **2 + sobel_y **2)
+        # Scale to 8-bit (0 - 255) and convert to type = np.uint8
+        scaled_sobel = np.uint8(255 * abs_sobel/np.max(abs_sobel))
+        # Create a binary mask where mag thresholds are met
+        binary_output = self._apply_thresh(scaled_sobel, thresh)
+        
+        return binary_output
+
+    def sobel_dir_thresh(self, sobel_x, sobel_y, thresh=(0, np.pi/2)):
+        # Take the absolute value of the x and y gradients
+        abs_sobel_x = np.absolute(sobel_x)
+        abs_sobel_y = np.absolute(sobel_y)
+        # Calculate the direction of the gradient 
+        abs_grad_dir = np.arctan2(abs_sobel_y, abs_sobel_x)
+        # Create a binary mask where direction thresholds are met
+        binary_output = self._apply_thresh(abs_grad_dir, thresh)
+       
+        return binary_output
+
+    def color_thresh(self, img, r_thresh = [0, 255], s_thresh = [0, 255], l_thresh = [0, 255]):
+        r_ch = img[:,:,2]
+        r_binary = self._apply_thresh(r_ch, r_thresh)
+
+        hls_img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
+        s_ch = hls_img[:,:,2]
+        s_binary = self._apply_thresh(s_ch, s_thresh)
+
+        l_ch = hls_img[:,:,1]
+        l_binary = self._apply_thresh(l_ch, l_thresh)
+
+        result = np.zeros_like(s_ch)
+        result[(r_binary == 1) & (s_binary == 1) | (l_binary == 1)] = 1
+
+        return result
 
     def unwarp_image(self, img):
 
@@ -53,8 +121,25 @@ class ImageProcessor():
         return cv2.undistort(img, self.mtx, self.dist, None, self.mtx)
 
     def process_image(self, img):
+
         result = self.undistort_image(img)
+
+        sobel_x = self._sobel(result, sobel_kernel = self.sobel_kernel, orient = 'x')
+        sobel_y = self._sobel(result, sobel_kernel = self.sobel_kernel, orient = 'y')
+
+        sobel_x_binary = self.sobel_abs_thresh(sobel_x, self.x_thresh)
+        sobel_y_binary = self.sobel_abs_thresh(sobel_y, self.y_thresh)
+
+        sobel_binary = np.zeros_like(sobel_x_binary)
+        sobel_binary[(sobel_x_binary == 1 ) & (sobel_y_binary == 1)] = 1
+
+        color_binary = self.color_thresh(result, self.r_thresh, self.s_thresh, self.l_thresh)
+
+        result = np.zeros_like(result)
+        result[(color_binary == 1) | (sobel_binary == 1)] = 255
+
         result, _, _ = self.unwarp_image(result)
+
         return result
 
 if __name__ == '__main__':
