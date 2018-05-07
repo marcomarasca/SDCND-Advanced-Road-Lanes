@@ -9,15 +9,25 @@ import camera_calibration as cc
 class ImageProcessor():
 
     def __init__(self, calibration_data_file):
+
+        # Camera calibration data
         calibration_data = cc.load_calibration_data(file_path = calibration_data_file)
         self.mtx = calibration_data['mtx']
         self.dist = calibration_data['dist']
+
+        # Gradient and color thresholding parameters
         self.sobel_kernel = 15
-        self.x_thresh = [20, 100]
-        self.y_thresh = [35, 100]
-        self.r_thresh = [200, 255]
-        self.s_thresh = [100, 255]
-        self.l_thresh = [200, 255]
+        self.x_thresh = [20, 100] # Sobel x threshold
+        self.y_thresh = [35, 100] # Sobel y threshold
+        self.r_thresh = [200, 255] # RGB, Red channel threshold
+        self.s_thresh = [100, 255] # HSL, S channel threshold
+        self.l_thresh = [200, 255] # HSL, L channel threshold
+
+        # Perspective transformation parameters
+        self.persp_src_left_line = (-0.66, 840) # Slope and intercept for left line
+        self.persp_src_right_line = (0.66, -5) # Slope and intercept for left line
+        self.persp_src_top_pct = 0.65 # Percentage from the top
+        self.persp_dst_x_pct = 0.25 # Destination offset percent
 
     def _sobel(self, img, orient = 'x', sobel_kernel = 3):
         gray_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -81,33 +91,33 @@ class ImageProcessor():
 
         return result
 
+    def _unwarp_coordinates(self, img):
+
+        img_shape = img.shape[1::-1]
+
+        src_y_offset = img_shape[1] * self.persp_src_top_pct
+        left_slope, left_intercept = self.persp_src_left_line
+        right_slope, right_intercept = self.persp_src_right_line
+        
+        src = np.float32([[(src_y_offset - left_intercept) / left_slope, src_y_offset],
+                          [(src_y_offset - right_intercept) / right_slope, src_y_offset],
+                          [(img_shape[1] - right_intercept) / right_slope, img_shape[1]],
+                          [(img_shape[1] - left_intercept) / left_slope, img_shape[1]]])
+
+        dst_x_offset = img_shape[0] * self.persp_dst_x_pct
+
+        dst = np.float32([[dst_x_offset, 0], 
+                          [img_shape[0] - dst_x_offset, 0], 
+                          [img_shape[0] - dst_x_offset, img_shape[1]],
+                          [dst_x_offset, img_shape[1]]])
+        
+        return src, dst
+
     def unwarp_image(self, img):
 
         img_shape = img.shape[1::-1]
 
-        x = img_shape[0] # 1280
-        y = img_shape[1] # 720
-
-        src_x_top_pct = 0.445
-        src_y_top_pct = 0.645
-
-        src_x_bot_pct = 0.85
-        src_y_bot_pct = 0
-
-        # top left, top right, bottom right, bottom left
-        src = np.float32([[x * src_x_top_pct, y * src_y_top_pct], 
-                          [x * (1 - src_x_top_pct), y * src_y_top_pct],
-                          [x * src_x_bot_pct, img_shape[1] * (1-src_y_bot_pct)], 
-                          [x * (1 - src_x_bot_pct), img_shape[1] * (1-src_y_bot_pct)]])
-
-        dst_x_pct = 0.25
-        dst_y_pct = 0
-
-        # top left, top right, bottom right, bottom left
-        dst = np.float32([[x * dst_x_pct, y * dst_y_pct], 
-                          [x * (1 - dst_x_pct), y * dst_y_pct], 
-                          [x * (1 - dst_x_pct), y * (1 - dst_y_pct)],
-                          [x * dst_x_pct, y * (1 - dst_y_pct)]])
+        src, dst = self._unwarp_coordinates(img)
 
         # Given src and dst points, calculate the perspective transform matrix
         trans_m = cv2.getPerspectiveTransform(src, dst)
@@ -175,5 +185,19 @@ if __name__ == '__main__':
     for img_file in img_files:
         img = cv2.imread(img_file)
         processed_img = imgProcessor.process_image(img)
-        out_file = os.path.join(args.output, os.path.split(img_file)[1][:-4] + '_processed.jpg')
-        cv2.imwrite(out_file, processed_img)
+       
+        out_file_prefix = os.path.join(args.output, os.path.split(img_file)[1][:-4])
+        cv2.imwrite(out_file_prefix + '_processed.jpg', processed_img)
+
+        src, dst = imgProcessor._unwarp_coordinates(img)
+        dst = np.array(dst, np.int32)
+        src = np.array(src, np.int32)
+
+        processed_src = imgProcessor.undistort_image(img)
+        processed_src = cv2.polylines(processed_src, [src],True,(0,0,255), 2)
+        processed_dst = cv2.polylines(processed_img, [dst],True,(0,0,255), 2)
+        
+        cv2.imwrite(out_file_prefix + '_persp_src.jpg', processed_src)
+        cv2.imwrite(out_file_prefix + '_persp_dst.jpg', processed_dst)
+
+        
