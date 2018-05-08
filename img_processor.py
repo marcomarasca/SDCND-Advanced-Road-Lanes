@@ -24,8 +24,10 @@ class ImageProcessor():
         self.l_thresh = [200, 255] # HSL, L channel threshold
 
         # Perspective transformation parameters
-        self.persp_src_left_line = (-0.66, 840) # Slope and intercept for left line
-        self.persp_src_right_line = (0.66, -5) # Slope and intercept for left line
+        # top left, top right = (585, 456), (700, 456)
+        # bottom left, bottom right = (297, 658), (1024, 658)
+        self.persp_src_left_line = (-0.6989619377, 864.8927335545) # Slope and intercept for left line
+        self.persp_src_right_line = (0.6234567901, 19.58024693) # Slope and intercept for right line
         self.persp_src_top_pct = 0.65 # Percentage from the top
         self.persp_dst_x_pct = 0.25 # Destination offset percent
 
@@ -91,7 +93,7 @@ class ImageProcessor():
 
         return result
 
-    def _unwarp_coordinates(self, img):
+    def _warp_coordinates(self, img):
 
         img_shape = img.shape[1::-1]
 
@@ -113,22 +115,36 @@ class ImageProcessor():
         
         return src, dst
 
+    def warp_image(self, img):
+
+        img_shape = img.shape[1::-1]
+
+        src, dst = self._warp_coordinates(img)
+
+        # Given src and dst points, calculate the perspective transform matrix
+        warp_m = cv2.getPerspectiveTransform(src, dst)
+        # Warp the image using OpenCV warpPerspective()
+        warped = cv2.warpPerspective(img, warp_m, img_shape)
+
+        return warped
+
     def unwarp_image(self, img):
 
         img_shape = img.shape[1::-1]
 
-        src, dst = self._unwarp_coordinates(img)
-
+        src, dst = self._warp_coordinates(img)
         # Given src and dst points, calculate the perspective transform matrix
-        trans_m = cv2.getPerspectiveTransform(src, dst)
-        trans_inv_m = cv2.getPerspectiveTransform(dst, src)
-        # Warp the image using OpenCV warpPerspective()
-        warped = cv2.warpPerspective(img, trans_m, img_shape)
+        warp_m = cv2.getPerspectiveTransform(dst, src)
 
-        return warped, trans_m, trans_inv_m
+        unwarped = cv2.warpPerspective(img, warp_m, img_shape)
+
+        return unwarped
 
     def undistort_image(self, img):
-        return cv2.undistort(img, self.mtx, self.dist, None, self.mtx)
+
+        undistorted_img = cv2.undistort(img, self.mtx, self.dist, None, self.mtx)
+        
+        return undistorted_img
 
     def process_image(self, img):
 
@@ -145,12 +161,10 @@ class ImageProcessor():
 
         color_binary = self.color_thresh(result, self.r_thresh, self.s_thresh, self.l_thresh)
 
-        result = np.zeros_like(result)
+        result = np.zeros_like(color_binary)
         result[(color_binary == 1) | (sobel_binary == 1)] = 255
 
-        result, _, _ = self.unwarp_image(result)
-
-        return result
+        return self.warp_image(result)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Image processor')
@@ -180,24 +194,25 @@ if __name__ == '__main__':
 
     img_files = glob.glob(args.file_path)
 
-    imgProcessor = ImageProcessor(args.calibration_data_file)
+    img_processor = ImageProcessor(args.calibration_data_file)
 
     for img_file in img_files:
         img = cv2.imread(img_file)
-        processed_img = imgProcessor.process_image(img)
+        processed_img = img_processor.process_image(img)
        
         out_file_prefix = os.path.join(args.output, os.path.split(img_file)[1][:-4])
         cv2.imwrite(out_file_prefix + '_processed.jpg', processed_img)
 
-        src, dst = imgProcessor._unwarp_coordinates(img)
-        dst = np.array(dst, np.int32)
-        src = np.array(src, np.int32)
+        src, dst = img_processor._warp_coordinates(img)
 
-        processed_src = imgProcessor.undistort_image(img)
-        processed_src = cv2.polylines(processed_src, [src],True,(0,0,255), 2)
-        processed_dst = cv2.polylines(processed_img, [dst],True,(0,0,255), 2)
+        src = np.array(src, np.int32)
+        dst = np.array(dst, np.int32)
+        
+        undistorted_img = img_processor.undistort_image(img)
+        warped_img = img_processor.warp_image(undistorted_img)
+
+        processed_src = cv2.polylines(undistorted_img, [src], True, (0,0,255), 2)
+        processed_dst = cv2.polylines(warped_img, [dst], True, (0,0,255), 2)
         
         cv2.imwrite(out_file_prefix + '_persp_src.jpg', processed_src)
         cv2.imwrite(out_file_prefix + '_persp_dst.jpg', processed_dst)
-
-        
