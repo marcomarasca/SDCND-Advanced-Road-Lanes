@@ -21,7 +21,7 @@ class ImageProcessor():
         self.y_thresh = [35, 100] # Sobel y threshold
         self.r_thresh = [200, 255] # RGB, Red channel threshold
         self.s_thresh = [100, 255] # HSL, S channel threshold
-        self.l_thresh = [200, 255] # HSL, L channel threshold
+        self.l_thresh = [210, 255] # HSL, L channel threshold
 
         # Perspective transformation parameters
         # top left, top right = (585, 456), (700, 456)
@@ -30,6 +30,28 @@ class ImageProcessor():
         self.persp_src_right_line = (0.6234567901, 19.58024693) # Slope and intercept for right line
         self.persp_src_top_pct = 0.65 # Percentage from the top
         self.persp_dst_x_pct = 0.25 # Destination offset percent
+
+    def _warp_coordinates(self, img):
+
+        img_shape = img.shape[1::-1]
+
+        src_y_offset = img_shape[1] * self.persp_src_top_pct
+        left_slope, left_intercept = self.persp_src_left_line
+        right_slope, right_intercept = self.persp_src_right_line
+        
+        src = np.float32([[(src_y_offset - left_intercept) / left_slope, src_y_offset],
+                          [(src_y_offset - right_intercept) / right_slope, src_y_offset],
+                          [(img_shape[1] - right_intercept) / right_slope, img_shape[1]],
+                          [(img_shape[1] - left_intercept) / left_slope, img_shape[1]]])
+
+        dst_x_offset = img_shape[0] * self.persp_dst_x_pct
+
+        dst = np.float32([[dst_x_offset, 0], 
+                          [img_shape[0] - dst_x_offset, 0], 
+                          [img_shape[0] - dst_x_offset, img_shape[1]],
+                          [dst_x_offset, img_shape[1]]])
+        
+        return src, dst
 
     def _sobel(self, img, orient = 'x', sobel_kernel = 3):
         gray_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -77,43 +99,21 @@ class ImageProcessor():
        
         return binary_output
 
-    def color_thresh(self, img, r_thresh = [0, 255], s_thresh = [0, 255], l_thresh = [0, 255]):
+    def color_thresh(self, img):
         r_ch = img[:,:,2]
-        r_binary = self._apply_thresh(r_ch, r_thresh)
+        r_binary = self._apply_thresh(r_ch, self.r_thresh)
 
         hls_img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
         s_ch = hls_img[:,:,2]
-        s_binary = self._apply_thresh(s_ch, s_thresh)
+        s_binary = self._apply_thresh(s_ch, self.s_thresh)
 
         l_ch = hls_img[:,:,1]
-        l_binary = self._apply_thresh(l_ch, l_thresh)
+        l_binary = self._apply_thresh(l_ch, self.l_thresh)
 
         result = np.zeros_like(s_ch)
         result[(r_binary == 1) & (s_binary == 1) | (l_binary == 1)] = 1
 
         return result
-
-    def _warp_coordinates(self, img):
-
-        img_shape = img.shape[1::-1]
-
-        src_y_offset = img_shape[1] * self.persp_src_top_pct
-        left_slope, left_intercept = self.persp_src_left_line
-        right_slope, right_intercept = self.persp_src_right_line
-        
-        src = np.float32([[(src_y_offset - left_intercept) / left_slope, src_y_offset],
-                          [(src_y_offset - right_intercept) / right_slope, src_y_offset],
-                          [(img_shape[1] - right_intercept) / right_slope, img_shape[1]],
-                          [(img_shape[1] - left_intercept) / left_slope, img_shape[1]]])
-
-        dst_x_offset = img_shape[0] * self.persp_dst_x_pct
-
-        dst = np.float32([[dst_x_offset, 0], 
-                          [img_shape[0] - dst_x_offset, 0], 
-                          [img_shape[0] - dst_x_offset, img_shape[1]],
-                          [dst_x_offset, img_shape[1]]])
-        
-        return src, dst
 
     def warp_image(self, img):
 
@@ -146,12 +146,10 @@ class ImageProcessor():
         
         return undistorted_img
 
-    def process_image(self, img):
+    def gradient_thresh(self, img):
 
-        result = self.undistort_image(img)
-
-        sobel_x = self._sobel(result, sobel_kernel = self.sobel_kernel, orient = 'x')
-        sobel_y = self._sobel(result, sobel_kernel = self.sobel_kernel, orient = 'y')
+        sobel_x = self._sobel(img, sobel_kernel = self.sobel_kernel, orient = 'x')
+        sobel_y = self._sobel(img, sobel_kernel = self.sobel_kernel, orient = 'y')
 
         sobel_x_binary = self.sobel_abs_thresh(sobel_x, self.x_thresh)
         sobel_y_binary = self.sobel_abs_thresh(sobel_y, self.y_thresh)
@@ -159,12 +157,21 @@ class ImageProcessor():
         sobel_binary = np.zeros_like(sobel_x_binary)
         sobel_binary[(sobel_x_binary == 1 ) & (sobel_y_binary == 1)] = 1
 
-        color_binary = self.color_thresh(result, self.r_thresh, self.s_thresh, self.l_thresh)
+        return sobel_binary
 
-        result = np.zeros_like(color_binary)
-        result[(color_binary == 1) | (sobel_binary == 1)] = 255
+    def process_image(self, img):
 
-        return self.warp_image(result)
+        undistorted_img = self.undistort_image(img)
+
+        gradient_binary = self.gradient_thresh(undistorted_img)
+        color_binary = self.color_thresh(undistorted_img)
+
+        processed_img = np.zeros_like(color_binary)
+        processed_img[(color_binary == 1) | (gradient_binary == 1)] = 255
+
+        warped_img = self.warp_image(processed_img)
+
+        return undistorted_img, processed_img, warped_img
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Image processor')
@@ -198,17 +205,25 @@ if __name__ == '__main__':
 
     for img_file in img_files:
         img = cv2.imread(img_file)
-        processed_img = img_processor.process_image(img)
+        undistorted_img, processed_img, processed_warped_img = img_processor.process_image(img)
        
         out_file_prefix = os.path.join(args.output, os.path.split(img_file)[1][:-4])
-        cv2.imwrite(out_file_prefix + '_processed.jpg', processed_img)
+        cv2.imwrite(out_file_prefix + '_processed.jpg', processed_warped_img)
+
+        cv2.imwrite(out_file_prefix + '_undistorted.jpg', undistorted_img)
+        cv2.imwrite(out_file_prefix + '_combined.jpg', processed_img)
+
+        sobel_img = img_processor.gradient_thresh(undistorted_img) * 255
+        cv2.imwrite(out_file_prefix + '_sobel.jpg', cv2.cvtColor(sobel_img, cv2.COLOR_GRAY2BGR))
+
+        color_img = img_processor.color_thresh(undistorted_img) * 255
+        cv2.imwrite(out_file_prefix + '_color.jpg', cv2.cvtColor(color_img, cv2.COLOR_GRAY2BGR))
 
         src, dst = img_processor._warp_coordinates(img)
 
         src = np.array(src, np.int32)
         dst = np.array(dst, np.int32)
         
-        undistorted_img = img_processor.undistort_image(img)
         warped_img = img_processor.warp_image(undistorted_img)
 
         processed_src = cv2.polylines(undistorted_img, [src], True, (0,0,255), 2)

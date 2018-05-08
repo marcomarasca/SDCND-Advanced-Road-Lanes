@@ -7,7 +7,7 @@ import glob
 
 from collections import deque
 
-class Lanetracker():
+class LaneTracker():
 
     def __init__(self, window_width = 90, window_height = 90, margin = 30, smooth_frames = 15):
         self.frames = deque(maxlen = smooth_frames)
@@ -172,7 +172,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--w_margin',
         type=int,
-        default=40,
+        default=30,
         help='Sliding window margin from center'
     )
 
@@ -189,12 +189,12 @@ if __name__ == '__main__':
 
     img_processor = ImageProcessor(args.calibration_data_file)
 
-    lane_tracker = Lanetracker(window_width=args.w_width, window_height=args.w_height, margin=args.w_margin, smooth_frames=0)
+    lane_tracker = LaneTracker(window_width=args.w_width, window_height=args.w_height, margin=args.w_margin, smooth_frames=0)
 
     for img_file in img_files:
         img = cv2.imread(img_file)
         print("Processing image: {}...".format(img_file))
-        processed_img = img_processor.process_image(img)
+        undistorted_img, _, processed_img = img_processor.process_image(img)
         print('Finding centroids...')
         window_centroids = lane_tracker.find_window_centroids(processed_img)
         curvature = lane_tracker.curvature(window_centroids)
@@ -207,7 +207,6 @@ if __name__ == '__main__':
         lanes_img = lane_tracker.draw_lanes(img, window_centroids)
         lanes_img = img_processor.unwarp_image(lanes_img)
 
-        undistorted_img = img_processor.undistort_image(img)
         undistorted_img = cv2.addWeighted(undistorted_img, 1.0, lanes_img, 1.0, 0)
 
         cv2.imwrite(out_file_prefix + '_lanes.jpg', undistorted_img)
