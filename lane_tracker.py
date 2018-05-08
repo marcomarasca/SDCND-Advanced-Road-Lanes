@@ -57,6 +57,23 @@ class Lanetracker():
         else:
             return np.average(self.frames, axis = 0)
 
+    def curvature(self, window_centroids, ym_per_pix = 30/720, xm_per_pix = 3.7/700):
+        
+        left_fit_x_vals = window_centroids[:,0]
+        right_fit_x_vals = window_centroids[:,1]
+
+        fit_y_vals = np.arange(img.shape[0] - (self.window_height / 2), 0, -self.window_height)
+
+        # Fit new polynomials to x,y in world space
+        left_fit_cr = np.polyfit(fit_y_vals * ym_per_pix, left_fit_x_vals * xm_per_pix, 2)
+        right_fit_cr = np.polyfit(fit_y_vals * ym_per_pix, right_fit_x_vals * xm_per_pix, 2)
+        y_eval = np.max(fit_y_vals)
+        # Calculate the new radius of curvature
+        left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+        right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+
+        return (left_curverad, right_curverad)
+
     def draw_lanes(self, img, window_centroids, blend = False, marker_width = 20):
 
         left_fit_x_vals = window_centroids[:,0]
@@ -180,7 +197,8 @@ if __name__ == '__main__':
         processed_img = img_processor.process_image(img)
         print('Finding centroids...')
         window_centroids = lane_tracker.find_window_centroids(processed_img)
-        
+        curvature = lane_tracker.curvature(window_centroids)
+        print('Curvature: {}'.format(curvature))
         processed_img = lane_tracker.draw_windows(processed_img, window_centroids, blend = True)
         
         out_file_prefix = os.path.join(args.output, os.path.split(img_file)[1][:-4])
