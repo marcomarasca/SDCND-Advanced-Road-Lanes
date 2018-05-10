@@ -1,32 +1,29 @@
 import pickle
 import cv2
 import numpy as np
-import glob
-import os
-import argparse
 import camera_calibration as cc
 
-class ImageProcessor():
+class ImageProcessor:
 
     def __init__(self, calibration_data_file):
 
         # Camera calibration data
-        print("Loading calibration data...")
         calibration_data = cc.load_calibration_data(file_path = calibration_data_file)
         self.mtx = calibration_data['mtx']
         self.dist = calibration_data['dist']
-        print(self.mtx, self.dist)
 
         # Gradient and color thresholding parameters
         self.sobel_kernel = 15
-        self.x_thresh = [15, 100] # Sobel x threshold
-        self.y_thresh = [30, 100] # Sobel y threshold
-        self.dir_thresh = [0.7, 1.3] # Sobel dir threshold
+        self.grad_x_thresh = (15, 100) # Sobel x threshold
+        self.grad_y_thresh = (30, 100) # Sobel y threshold
+        self.grad_mag_thresh = (30, 60) # Sobel magnitude threshold
+        self.grad_dir_thresh = (0.7, 1.3) # Sobel direction range
 
-        self.r_thresh = [200, 255] # RGB, Red channel threshold
-        self.s_thresh = [100, 255] # HSL, S channel threshold
-        self.l_thresh = [195, 255] # HSL, L channel threshold
-        self.v_thresh = [170, 255] # HSV, V channel threshold
+        self.r_thresh = (200, 255) # RGB, Red channel threshold
+        self.s_thresh = (100, 255) # HSL, S channel threshold
+        self.l_thresh = (200, 255) # HSL, L channel threshold
+        self.b_thresh = (150, 255) # LAB, B channel threshold
+        self.v_thresh = (140, 255) # HSV, V channel threshold
 
         # Perspective transformation parameters
         # top left, top right = (585, 456), (700, 456)
@@ -35,30 +32,39 @@ class ImageProcessor():
         self.persp_src_right_line = (0.6234567901, 19.58024693) # Slope and intercept for right line
         self.persp_src_top_pct = 0.655 # Percentage from the top
         self.persp_dst_x_pct = 0.25 # Destination offset percent
+        self.persp_dst_y_pct = 0
+        self.persp_src = None
+        self.persp_dst = None
 
     def _warp_coordinates(self, img):
 
-        cols = img.shape[1]
-        rows = img.shape[0]
+        if self.persp_src is None or self.persp_dst is None:
 
-        src_y_offset = rows * self.persp_src_top_pct
-        left_slope, left_intercept = self.persp_src_left_line
-        right_slope, right_intercept = self.persp_src_right_line
+            cols = img.shape[1]
+            rows = img.shape[0]
 
-        # Top left, Top right, Bottom right, Bottom left        
-        src = np.float32([[(src_y_offset - left_intercept) / left_slope, src_y_offset],
-                          [(src_y_offset - right_intercept) / right_slope, src_y_offset],
-                          [(rows - right_intercept) / right_slope, rows],
-                          [(rows - left_intercept) / left_slope, rows]])
+            src_y_offset = rows * self.persp_src_top_pct
+            left_slope, left_intercept = self.persp_src_left_line
+            right_slope, right_intercept = self.persp_src_right_line
 
-        dst_x_offset = cols * self.persp_dst_x_pct
+            # Top left, Top right, Bottom right, Bottom left        
+            src = np.float32([[(src_y_offset - left_intercept) / left_slope, src_y_offset],
+                            [(src_y_offset - right_intercept) / right_slope, src_y_offset],
+                            [(rows - right_intercept) / right_slope, rows],
+                            [(rows - left_intercept) / left_slope, rows]])
 
-        dst = np.float32([[dst_x_offset, 0], 
-                          [cols - dst_x_offset, 0], 
-                          [cols - dst_x_offset, rows],
-                          [dst_x_offset, rows]])
+            dst_x_offset = cols * self.persp_dst_x_pct
+            dst_y_offset = rows * self.persp_dst_y_pct
+
+            dst = np.float32([[dst_x_offset, 0], 
+                            [cols - dst_x_offset, 0], 
+                            [cols - dst_x_offset, rows + dst_y_offset],
+                            [dst_x_offset, rows + dst_y_offset]])
+                            
+            self.persp_src = src
+            self.persp_dst = dst
         
-        return src, dst
+        return self.persp_src, self.persp_dst
 
     def _sobel(self, img, orient = 'x', sobel_kernel = 3):
         # Take the derivative in x or y given orient = 'x' or 'y'
@@ -82,7 +88,7 @@ class ImageProcessor():
         # Given src and dst points, calculate the perspective transform matrix
         warp_m = cv2.getPerspectiveTransform(dst, src)
 
-        unwarped = cv2.warpPerspective(img, warp_m, img_shape, flags = cv2.INTER_LINEAR)
+        unwarped = cv2.warpPerspective(img, warp_m, img_shape)
 
         return unwarped
 
@@ -95,7 +101,7 @@ class ImageProcessor():
         # Given src and dst points, calculate the perspective transform matrix
         warp_m = cv2.getPerspectiveTransform(src, dst)
         # Warp the image using OpenCV warpPerspective()
-        warped = cv2.warpPerspective(img, warp_m, img_shape, flags = cv2.INTER_LINEAR)
+        warped = cv2.warpPerspective(img, warp_m, img_shape)
 
         return warped
 
@@ -136,22 +142,32 @@ class ImageProcessor():
     def gradient_thresh(self, img):
 
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        #gray_img = cv2.GaussianBlur(gray_img, (5, 5), 0)
+
+        hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        v_ch = hsv_img[:,:,2]
+        v_binary = self._apply_thresh(v_ch, (150, 255))
 
         sobel_x = self._sobel(gray_img, sobel_kernel = self.sobel_kernel, orient = 'x')
         sobel_y = self._sobel(gray_img, sobel_kernel = self.sobel_kernel, orient = 'y')
 
-        sobel_x_binary = self.sobel_abs_thresh(sobel_x, self.x_thresh)
-        sobel_y_binary = self.sobel_abs_thresh(sobel_y, self.x_thresh)
+        sobel_x_binary = self.sobel_abs_thresh(sobel_x, thresh = self.grad_x_thresh)
+        #sobel_y_binary = self.sobel_abs_thresh(sobel_y, self.grad_x_thresh)
+        sobel_dir_binary = self.sobel_dir_thresh(sobel_x, sobel_y, thresh = self.grad_dir_thresh)
+        #sobel_mag_binary = self.sobel_mag_thresh(sobel_x, sobel_y, thresh = self.grad_mag_thresh)
 
         sobel_binary = np.zeros_like(sobel_x_binary)
-        sobel_binary[(sobel_x_binary == 1) & (sobel_y_binary == 1)] = 1
-
+        #sobel_binary[(sobel_x_binary == 1) & (sobel_y_binary == 1)] = 1
+        #sobel_binary[(sobel_x_binary == 1) & (sobel_mag_binary == 1) & (sobel_dir_binary == 1)] = 1
+        sobel_binary[(sobel_x_binary == 1) & (v_binary == 1) & (sobel_dir_binary == 1)] = 1
+        
         return sobel_binary
 
     def color_thresh(self, img):
-        
+
         hls_img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
         hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
 
         r_ch = img[:,:,2]
         r_binary = self._apply_thresh(r_ch, self.r_thresh)
@@ -162,18 +178,26 @@ class ImageProcessor():
         s_ch = hls_img[:,:,2]
         s_binary = self._apply_thresh(s_ch, self.s_thresh)
 
+        b_ch = lab_img[:,:,2]
+        b_binary = self._apply_thresh(b_ch, self.b_thresh)
+
         v_ch = hsv_img[:,:,2]
         v_binary = self._apply_thresh(v_ch, self.v_thresh)
 
-        return r_binary, l_binary, s_binary, v_binary
+        result = np.zeros_like(s_binary)
 
+        # B and V for yellow, R and L for white
+        result[((b_binary == 1) & (v_binary == 1)) | ((r_binary == 1) & (l_binary == 1)) | ((s_binary == 1) & (l_binary == 1))] = 1
+
+        return result
+        
     def threshold_image(self, img):
 
-        g_binary = self.gradient_thresh(img)
-        r_binary, l_binary, s_binary, v_binary = self.color_thresh(img)
+        gradient_binary = self.gradient_thresh(img)
+        color_binary = self.color_thresh(img)
 
-        result = np.zeros_like(g_binary)
-        result[((s_binary == 1) & (g_binary == 1)) | ((r_binary == 1) & (s_binary == 1)) | ((v_binary == 1) & (g_binary == 1)) ] = 255
+        result = np.zeros_like(gradient_binary)
+        result[(gradient_binary == 1) | (color_binary) == 1] = 255
 
         return result
 
@@ -181,62 +205,8 @@ class ImageProcessor():
 
         undistorted_img = self.undistort_image(img)
 
-        thresholded_image = self.threshold_image(undistorted_img)
+        thresholded_img = self.threshold_image(undistorted_img)
 
-        warped_img = self.warp_image(thresholded_image)
+        warped_img = self.warp_image(thresholded_img)
 
-        return undistorted_img, thresholded_image, warped_img
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Image processor')
-
-    parser.add_argument(
-        '--file_path',
-        type=str,
-        default=os.path.join('test_images', '*.jpg'),
-        help='File pattern for images to process'
-    )
-
-    parser.add_argument(
-        '--output',
-        type=str,
-        default='output_images',
-        help='Folder where to save the processed images'
-    )
-
-    parser.add_argument(
-        '--calibration_data_file',
-        type=str,
-        default=os.path.join('camera_cal', 'calibration.p'),
-        help='Pickle file containing calibration data'
-    )
-
-    args = parser.parse_args()
-
-    img_files = glob.glob(args.file_path)
-
-    img_processor = ImageProcessor(args.calibration_data_file)
-
-    for img_file in img_files:
-        img = cv2.imread(img_file)
-        undistorted_img, thresholded_img, processed_warped_img = img_processor.process_image(img)
-       
-        out_file_prefix = os.path.join(args.output, os.path.split(img_file)[1][:-4])
-        cv2.imwrite(out_file_prefix + '_processed.jpg', processed_warped_img)
-
-        cv2.imwrite(out_file_prefix + '_undistorted.jpg', undistorted_img)
-        cv2.imwrite(out_file_prefix + '_thresholded.jpg', thresholded_img)
-        cv2.imwrite(out_file_prefix + '_gradient.jpg', img_processor.gradient_thresh(undistorted_img) * 255)
-
-        src, dst = img_processor._warp_coordinates(img)
-
-        src = np.array(src, np.int32)
-        dst = np.array(dst, np.int32)
-        
-        warped_img = img_processor.warp_image(undistorted_img)
-
-        processed_src = cv2.polylines(undistorted_img, [src], True, (0,0,255), 2)
-        processed_dst = cv2.polylines(warped_img, [dst], True, (0,0,255), 2)
-        
-        cv2.imwrite(out_file_prefix + '_persp_src.jpg', processed_src)
-        cv2.imwrite(out_file_prefix + '_persp_dst.jpg', processed_dst)
+        return undistorted_img, thresholded_img, warped_img
