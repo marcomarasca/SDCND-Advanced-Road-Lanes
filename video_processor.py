@@ -13,11 +13,13 @@ class VideoProcessor:
     def __init__(self, calibration_data_file, smooth_frames = 10):
         self.img_processor = ImageProcessor(calibration_data_file)
         self.lane_tracker = LaneTracker(smooth_frames = smooth_frames)
-        self.count = 10
+        #self.count = 15
 
     def process_frame(self, img):
 
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        #cv2.imwrite(os.path.join('test_images', 'test' + str(self.count) + '.png'), img)
+
         undistorted_img, thresholded_img, warped_img = self.img_processor.process_image(img)
         
         lanes_centroids = self.lane_tracker.find_lanes_centroids(warped_img)
@@ -26,9 +28,8 @@ class VideoProcessor:
         lane_img = self.img_processor.unwarp_image(lane_img)
 
         out_image = cv2.addWeighted(undistorted_img, 1.0, lane_img, 1.0, 0)
-        #cv2.imwrite(os.path.join('test_images', 'test' + str(self.count) + '.jpg'), img)
-            
-        self.count += 1
+        #cv2.imwrite(os.path.join('output_images', 'test' + str(self.count) + '_lanes_v.jpg'), out_image)
+        #self.count += 1
         out_image = cv2.cvtColor(out_image, cv2.COLOR_BGR2RGB)
 
         return out_image
@@ -62,20 +63,20 @@ if __name__ == '__main__':
     parser.add_argument(
         '--smooth',
         type=int,
-        default=10,
+        default=0,
         help='Number of frames to smooth'
     )
 
     parser.add_argument(
         '--start',
-        type=int,
+        type=float,
         default=None,
         help='Time start'
     )
 
     parser.add_argument(
         '--end',
-        type=int,
+        type=float,
         default=None,
         help='Time start'
     )

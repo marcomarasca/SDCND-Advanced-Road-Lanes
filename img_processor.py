@@ -15,9 +15,8 @@ class ImageProcessor:
         # Gradient and color thresholding parameters
         self.sobel_kernel = 15
         self.grad_x_thresh = (15, 100) # Sobel x threshold
-        self.grad_y_thresh = (30, 100) # Sobel y threshold
-        self.grad_mag_thresh = (30, 60) # Sobel magnitude threshold
         self.grad_dir_thresh = (0.7, 1.3) # Sobel direction range
+        self.grad_v_thresh = (160, 255) # HSV, V channel threshold to filter gradient
 
         self.r_thresh = (200, 255) # RGB, Red channel threshold
         self.s_thresh = (100, 255) # HSL, S channel threshold
@@ -32,7 +31,7 @@ class ImageProcessor:
         self.persp_src_right_line = (0.6234567901, 19.58024693) # Slope and intercept for right line
         self.persp_src_top_pct = 0.655 # Percentage from the top
         self.persp_dst_x_pct = 0.25 # Destination offset percent
-        self.persp_dst_y_pct = 0
+        self.persp_dst_y_pct = 0.04
         self.persp_src = None
         self.persp_dst = None
 
@@ -142,23 +141,18 @@ class ImageProcessor:
     def gradient_thresh(self, img):
 
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        #gray_img = cv2.GaussianBlur(gray_img, (5, 5), 0)
 
         hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         v_ch = hsv_img[:,:,2]
-        v_binary = self._apply_thresh(v_ch, (150, 255))
+        v_binary = self._apply_thresh(v_ch, self.grad_v_thresh)
 
         sobel_x = self._sobel(gray_img, sobel_kernel = self.sobel_kernel, orient = 'x')
         sobel_y = self._sobel(gray_img, sobel_kernel = self.sobel_kernel, orient = 'y')
 
         sobel_x_binary = self.sobel_abs_thresh(sobel_x, thresh = self.grad_x_thresh)
-        #sobel_y_binary = self.sobel_abs_thresh(sobel_y, self.grad_x_thresh)
         sobel_dir_binary = self.sobel_dir_thresh(sobel_x, sobel_y, thresh = self.grad_dir_thresh)
-        #sobel_mag_binary = self.sobel_mag_thresh(sobel_x, sobel_y, thresh = self.grad_mag_thresh)
 
         sobel_binary = np.zeros_like(sobel_x_binary)
-        #sobel_binary[(sobel_x_binary == 1) & (sobel_y_binary == 1)] = 1
-        #sobel_binary[(sobel_x_binary == 1) & (sobel_mag_binary == 1) & (sobel_dir_binary == 1)] = 1
         sobel_binary[(sobel_x_binary == 1) & (v_binary == 1) & (sobel_dir_binary == 1)] = 1
         
         return sobel_binary
