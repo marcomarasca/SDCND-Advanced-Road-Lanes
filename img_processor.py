@@ -13,11 +13,12 @@ class ImageProcessor:
         self.dist = calibration_data['dist']
 
         # Gradient and color thresholding parameters
-        self.sobel_kernel = 15
-        self.grad_x_thresh = (15, 100) # Sobel x threshold
-        self.grad_y_thresh = (30, 100) # Sobel y threshold
+        self.sobel_kernel = 5
+        self.grad_x_thresh = (15, 255) # Sobel x threshold
+        self.grad_y_thresh = (25, 255) # Sobel y threshold
+        self.grad_mag_thresh = (40, 255) # Sobel mag threshold
         self.grad_dir_thresh = (0.7, 1.3) # Sobel direction range
-        self.grad_l_thresh = (180, 255) # HSL, L channel threshold to filter gradient
+        self.grad_v_thresh = (180, 255) # HSV, V channel threshold to filter gradient
 
         self.r_thresh = (200, 255) # RGB, Red channel threshold
         self.s_thresh = (100, 255) # HSL, S channel threshold
@@ -119,12 +120,13 @@ class ImageProcessor:
         return binary_output
 
     def sobel_mag_thresh(self, sobel_x, sobel_y, thresh=(0, 255)):
-        # Calculate the magnitude 
-        abs_sobel = np.sqrt(sobel_x **2 + sobel_y **2)
-        # Scale to 8-bit (0 - 255) and convert to type = np.uint8
-        scaled_sobel = np.uint8(255 * abs_sobel/np.max(abs_sobel))
+        # Calculate the gradient magnitude
+        gradmag = np.sqrt(sobel_x**2 + sobel_y**2)
+        # Rescale to 8 bit
+        scale_factor = np.max(gradmag)/255 
+        gradmag = (gradmag/scale_factor).astype(np.uint8) 
         # Create a binary mask where mag thresholds are met
-        binary_output = self._apply_thresh(scaled_sobel, thresh)
+        binary_output = self._apply_thresh(gradmag, thresh)
         
         return binary_output
 
@@ -143,9 +145,9 @@ class ImageProcessor:
 
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        hsl_img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
-        l_ch = hsl_img[:,:,1]
-        l_binary = self._apply_thresh(l_ch, self.grad_l_thresh)
+        hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        v_ch = hsv_img[:,:,2]
+        v_binary = self._apply_thresh(v_ch, self.grad_v_thresh)
 
         sobel_x = self._sobel(gray_img, sobel_kernel = self.sobel_kernel, orient = 'x')
         sobel_y = self._sobel(gray_img, sobel_kernel = self.sobel_kernel, orient = 'y')
@@ -153,10 +155,12 @@ class ImageProcessor:
         sobel_x_binary = self.sobel_abs_thresh(sobel_x, thresh = self.grad_x_thresh)
         sobel_y_binary = self.sobel_abs_thresh(sobel_y, thresh = self.grad_y_thresh)
 
+        sobel_mag_binary = self.sobel_mag_thresh(sobel_x, sobel_y, thresh = self.grad_mag_thresh)
         sobel_dir_binary = self.sobel_dir_thresh(sobel_x, sobel_y, thresh = self.grad_dir_thresh)
 
         sobel_binary = np.zeros_like(sobel_x_binary)
-        sobel_binary[(sobel_x_binary == 1) & (sobel_y_binary == 1) & (sobel_dir_binary == 1) & (l_binary == 1)] = 1
+
+        sobel_binary[(((sobel_x_binary == 1) & (sobel_y_binary == 1)) | (sobel_dir_binary == 1)) & (sobel_mag_binary == 1) & (v_binary == 1)] = 1
         
         return sobel_binary
 
@@ -183,8 +187,8 @@ class ImageProcessor:
 
         result = np.zeros_like(s_binary)
 
-        # B and V for yellow, R and L for white
-        result[((b_binary == 1) & (v_binary == 1)) | ((r_binary == 1) & (l_binary == 1)) | ((s_binary == 1) & (l_binary == 1))] = 1
+        # B and V for yellow, R and L for white, S and V for both
+        result[((b_binary == 1) & (v_binary == 1)) | ((r_binary == 1) & (l_binary == 1)) | ((s_binary == 1) & (v_binary == 1))] = 1
 
         return result
         
