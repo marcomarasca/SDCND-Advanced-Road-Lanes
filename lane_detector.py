@@ -6,7 +6,7 @@ class LaneDetector:
 
     FAIL_CODES = {
         1: 'Lane distance not within threshold',
-        2: 'Lane distance too different'
+        2: 'Lane distance too different from previous'
     }
 
     def __init__(self, window_width = 40, window_height = 80, margin = 40, smooth_frames = 15):
@@ -16,10 +16,10 @@ class LaneDetector:
         self.margin = margin
         self.bottom_pct = .75
         self.min_points_fit = 4 # Number of point already found before trying to fit a line when no center is detected
-        self.lanes_dist_thresh = (400, 700)
+        self.lanes_dist_thresh = (480, 780)
         self.lanes_dist_max_diff = 30
-        self.xm = 3.7/615
-        self.ym = 3/130
+        self.xm = 3.7/710
+        self.ym = 3/120
 
     def find_lane_start(self, img, window):
 
@@ -125,6 +125,7 @@ class LaneDetector:
         if fail_code > 0 and len(self.centroids_buffer) > 0:
             # In case of failure simply reuse the previous computation
             lanes_centroids = self.centroids_buffer[-1]
+            #lanes_centroids = np.average(self.centroids_buffer, axis = 0)
 
         self.centroids_buffer.append(lanes_centroids)
 
