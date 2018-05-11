@@ -7,7 +7,7 @@ import numpy as np
 from glob import glob
 from tqdm import tqdm
 from img_processor import ImageProcessor
-from lane_tracker import LaneTracker
+from lane_detector import LaneDetector
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Image processor')
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--w_width',
         type=int,
-        default=35,
+        default=40,
         help='Sliding window width'
     )
 
@@ -62,7 +62,7 @@ if __name__ == '__main__':
         img_files.extend(glob(os.path.join(args.dir, ext)))
 
     img_processor = ImageProcessor(args.calibration_data_file)
-    lane_tracker = LaneTracker(window_width=args.w_width, window_height=args.w_height, margin=args.w_margin, smooth_frames = 0)
+    lane_tracker = LaneDetector(window_width=args.w_width, window_height=args.w_height, margin=args.w_margin, smooth_frames = 0)
 
     for img_file in tqdm(img_files, unit=' images', desc ='Image processing'):
 
@@ -94,7 +94,7 @@ if __name__ == '__main__':
         cv2.imwrite(out_file_prefix + '_persp_src.jpg', processed_src)
         cv2.imwrite(out_file_prefix + '_persp_dst.jpg', processed_dst)
 
-        lanes_centroids = lane_tracker.find_lanes_centroids(processed_img)
+        lanes_centroids, curvature, deviation, failed = lane_tracker.detect_lanes(processed_img)
         processed_img = lane_tracker.draw_windows(processed_img, lanes_centroids, blend = True)
         
         cv2.imwrite(out_file_prefix + '_windows.jpg', processed_img)
@@ -103,5 +103,9 @@ if __name__ == '__main__':
         lanes_img = img_processor.unwarp_image(lanes_img)
 
         lanes_img = cv2.addWeighted(undistorted_img, 1.0, lanes_img, 1.0, 0)
+        font = cv2.FONT_HERSHEY_COMPLEX
+        font_color = (0, 255, 0)
+        cv2.putText(lanes_img, 'Curvature left: {:.3f}, Curvature right: {:.3f})'.format(curvature[0], curvature[1]), (30, 60), font, 1, font_color, 2)
+        cv2.putText(lanes_img, 'Deviation from center: {:.2f} m'.format(deviation), (30, 90), font, 1, font_color, 2)
 
         cv2.imwrite(out_file_prefix + '_lanes.jpg', lanes_img)

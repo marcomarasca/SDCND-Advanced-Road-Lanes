@@ -4,32 +4,44 @@ import cv2
 import numpy as np
 
 from img_processor import ImageProcessor
-from lane_tracker import LaneTracker
+from lane_detector import LaneDetector
 
 from moviepy.editor import VideoFileClip
 
 class VideoProcessor:
 
-    def __init__(self, calibration_data_file, smooth_frames = 10):
+    def __init__(self, calibration_data_file, smooth_frames = 10, debug = False):
         self.img_processor = ImageProcessor(calibration_data_file)
-        self.lane_tracker = LaneTracker(smooth_frames = smooth_frames)
-        #self.count = 15
+        self.lane_tracker = LaneDetector(smooth_frames = smooth_frames)
+        self.count = 17
+        self.debug = debug
 
     def process_frame(self, img):
 
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        #cv2.imwrite(os.path.join('test_images', 'test' + str(self.count) + '.png'), img)
-
+       
         undistorted_img, thresholded_img, warped_img = self.img_processor.process_image(img)
         
-        lanes_centroids = self.lane_tracker.find_lanes_centroids(warped_img)
+        lanes_centroids, curvature, deviation, fail_code = self.lane_tracker.detect_lanes(warped_img)
         
-        lane_img = self.lane_tracker.draw_lanes(undistorted_img, lanes_centroids)
+        lane_img = self.lane_tracker.draw_lanes(undistorted_img, lanes_centroids, inner_marker = True)
         lane_img = self.img_processor.unwarp_image(lane_img)
 
         out_image = cv2.addWeighted(undistorted_img, 1.0, lane_img, 1.0, 0)
-        #cv2.imwrite(os.path.join('output_images', 'test' + str(self.count) + '_lanes_v.jpg'), out_image)
-        #self.count += 1
+
+        font = cv2.FONT_HERSHEY_COMPLEX
+        font_color = (0, 255, 0)
+        
+        cv2.putText(out_image, 'Curvature left: {}, Curvature right: {})'.format(curvature[0], curvature[1]), (30, 60), font, 1, font_color, 2)
+        cv2.putText(out_image, 'Deviation from center: {:.2f} m'.format(deviation), (30, 90), font, 1, font_color, 2)
+
+        if self.debug and fail_code > 0:
+            cv2.putText(out_image, 'Detection Failed: {}'.format(LaneDetector.FAIL_CODES[fail_code]), (30, 120), font, 1, (0, 0, 255), 2)
+            cv2.putText(img, 'Detection Failed: {}'.format(LaneDetector.FAIL_CODES[fail_code]), (30, 60), font, 1, (0, 0, 255), 2)
+            cv2.imwrite(os.path.join('test_images', 'test' + str(self.count) + '_failed.png'), img)
+
+        self.count += 1
+
         out_image = cv2.cvtColor(out_image, cv2.COLOR_BGR2RGB)
 
         return out_image
@@ -85,5 +97,5 @@ if __name__ == '__main__':
 
     output = os.path.split(args.file_path)[1][:-4] + '_processed.mp4'
 
-    video_processor = VideoProcessor(args.calibration_data_file, smooth_frames = args.smooth)
+    video_processor = VideoProcessor(args.calibration_data_file, smooth_frames = args.smooth, debug=True)
     video_processor.process_video(args.file_path, output, t_start = args.start, t_end = args.end)
