@@ -50,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--w_margin',
         type=int,
-        default=40,
+        default=35,
         help='Sliding window margin from center'
     )
 
@@ -103,9 +103,9 @@ if __name__ == '__main__':
         lanes_img = img_processor.unwarp_image(lanes_img)
 
         lanes_img = cv2.addWeighted(undistorted_img, 1.0, lanes_img, 1.0, 0)
-        font = cv2.FONT_HERSHEY_COMPLEX
+        font = cv2.FONT_HERSHEY_DUPLEX
         font_color = (0, 255, 0)
-        cv2.putText(lanes_img, 'Curvature left: {:.3f}, Curvature right: {:.3f})'.format(curvature[0], curvature[1]), (30, 60), font, 1, font_color, 2)
-        cv2.putText(lanes_img, 'Deviation from center: {:.2f} m'.format(deviation), (30, 90), font, 1, font_color, 2)
+        cv2.putText(lanes_img, 'Left Curvature: {:.1f}, Right Curvature: {:.1f}'.format(curvature[0], curvature[1]), (30, 60), font, 1, font_color, 2)
+        cv2.putText(lanes_img, 'Center Offset: {:.2f} m'.format(deviation), (30, 90), font, 1, font_color, 2)
 
         cv2.imwrite(out_file_prefix + '_lanes.jpg', lanes_img)

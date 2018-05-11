@@ -2,6 +2,7 @@ import argparse
 import os
 import cv2
 import numpy as np
+import time
 
 from img_processor import ImageProcessor
 from lane_detector import LaneDetector
@@ -30,11 +31,11 @@ class VideoProcessor:
 
         out_image = cv2.addWeighted(undistorted_img, 1.0, lane_img, 1.0, 0)
 
-        font = cv2.FONT_HERSHEY_COMPLEX
+        font = cv2.FONT_HERSHEY_DUPLEX
         font_color = (0, 255, 0)
         
-        cv2.putText(out_image, 'Curvature left: {:.3f}, Curvature right: {:.3f})'.format(curvature[0], curvature[1]), (30, 60), font, 1, font_color, 2)
-        cv2.putText(out_image, 'Deviation from center: {:.2f} m'.format(deviation), (30, 90), font, 1, font_color, 2)
+        cv2.putText(out_image, 'Left Curvature: {:.1f}, Right Curvature: {:.1f}'.format(curvature[0], curvature[1]), (30, 60), font, 1, font_color, 2)
+        cv2.putText(out_image, 'Center Offset: {:.2f} m'.format(deviation), (30, 90), font, 1, font_color, 2)
 
         if fail_code > 0:
             self.fail_count += 1
@@ -100,7 +101,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    output = os.path.split(args.file_path)[1][:-4] + '_processed.mp4'
+    date_time_str = time.strftime('%Y%m%d-%H%M%S')
+
+    output = os.path.split(args.file_path)[1][:-4] + '_processed_' + date_time_str + '.mp4'
 
     video_processor = VideoProcessor(args.calibration_data_file, smooth_frames = args.smooth, debug=True)
     video_processor.process_video(args.file_path, output, t_start = args.start, t_end = args.end)

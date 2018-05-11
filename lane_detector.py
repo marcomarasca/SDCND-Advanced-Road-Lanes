@@ -6,18 +6,19 @@ class LaneDetector:
 
     FAIL_CODES = {
         1: 'Lane distance not within threshold',
-        2: 'Lane distance too different from previous'
+        2: 'Lane distance deviates from mean'
     }
 
-    def __init__(self, window_width = 40, window_height = 80, margin = 40, smooth_frames = 15):
+    def __init__(self, window_width = 40, window_height = 80, margin = 35, smooth_frames = 15):
         self.centroids_buffer = deque(maxlen = smooth_frames)
         self.window_width = window_width
         self.window_height = window_height
         self.margin = margin
+        self.signal_thresh = 100000 # Minimum signal in a window to avoid noise
         self.bottom_pct = .75
         self.min_points_fit = 4 # Number of point already found before trying to fit a line when no center is detected
         self.lanes_dist_thresh = (480, 780)
-        self.lanes_dist_max_diff = 30
+        self.lanes_dist_dev_mean = 30 # Max deviation from mean
         self.xm = 3.7/710
         self.ym = 3/120
 
@@ -49,25 +50,19 @@ class LaneDetector:
 
         return l_center, r_center, int(img.shape[0] - self.window_height / 2)
 
-    def find_window_center(self, img, window, level, prev_center):
-
-        window_top = int(img.shape[0] - (level + 1) * self.window_height)
-        window_bottom = int(img.shape[0] - level * self.window_height)
-
-        # Convolve the window into the vertical slice of the image
-        image_slice = np.sum(img[window_top:window_bottom, :], axis=0)
-        conv_signal = np.convolve(window, image_slice)
+    def find_window_center(self, img, conv_signal, prev_center):
 
         offset = self.window_width / 2
         # Find the best center by using past center as a reference
         min_index = int(max(prev_center + offset - self.margin, 0))
         max_index = int(min(prev_center + offset + self.margin, img.shape[1]))
 
-        center_max = np.argmax(conv_signal[min_index:max_index])
+        conv_window = conv_signal[min_index:max_index]
+        max_signal = np.max(conv_window)
         
-        # Update the center only if there is some signal
-        if center_max > 0:
-            center = center_max + min_index - offset
+        # Check if there is enough signal
+        if max_signal >= self.signal_thresh:
+            center = np.argmax(conv_window) + min_index - offset
         else:
             center = None
 
@@ -77,9 +72,15 @@ class LaneDetector:
         return np.clip(fit[0]*y**2 + fit[1]*y + fit[2], 0, img.shape[1])
 
     def estimate_centroids(self, img, window, level, prev_l_center, prev_r_center, lanes_centroids):
+        window_top = int(img.shape[0] - (level + 1) * self.window_height)
+        window_bottom = int(img.shape[0] - level * self.window_height)
 
-        l_center = self.find_window_center(img, window, level, prev_l_center)
-        r_center = self.find_window_center(img, window, level, prev_r_center)
+        # Convolve the window into the vertical slice of the image
+        image_slice = np.sum(img[window_top:window_bottom, :], axis=0)
+        conv_signal = np.convolve(window, image_slice)
+
+        l_center = self.find_window_center(img, conv_signal, prev_l_center)
+        r_center = self.find_window_center(img, conv_signal, prev_r_center)
 
         center_y = int((img.shape[0] - level * self.window_height) - self.window_height / 2)
 
@@ -149,11 +150,11 @@ class LaneDetector:
 
         # Checks that the distance is not far apart from previous frames
         if len(self.centroids_buffer) > 0:
-
+            
             prev_centroids = np.mean(self.centroids_buffer, axis = 0)
             prev_centroids_distance = self.compute_mean_distance(prev_centroids[:,0], prev_centroids[:,1])
 
-            if np.absolute(lanes_distance - prev_centroids_distance) > self.lanes_dist_max_diff:
+            if np.absolute(lanes_distance - prev_centroids_distance) > self.lanes_dist_dev_mean:
                 return 2
 
         return 0
