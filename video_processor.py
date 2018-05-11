@@ -14,6 +14,7 @@ class VideoProcessor:
         self.img_processor = ImageProcessor(calibration_data_file)
         self.lane_tracker = LaneDetector(smooth_frames = smooth_frames)
         self.count = 17
+        self.fail_count = 0
         self.debug = debug
 
     def process_frame(self, img):
@@ -32,13 +33,15 @@ class VideoProcessor:
         font = cv2.FONT_HERSHEY_COMPLEX
         font_color = (0, 255, 0)
         
-        cv2.putText(out_image, 'Curvature left: {}, Curvature right: {})'.format(curvature[0], curvature[1]), (30, 60), font, 1, font_color, 2)
+        cv2.putText(out_image, 'Curvature left: {:.3f}, Curvature right: {:.3f})'.format(curvature[0], curvature[1]), (30, 60), font, 1, font_color, 2)
         cv2.putText(out_image, 'Deviation from center: {:.2f} m'.format(deviation), (30, 90), font, 1, font_color, 2)
 
-        if self.debug and fail_code > 0:
-            cv2.putText(out_image, 'Detection Failed: {}'.format(LaneDetector.FAIL_CODES[fail_code]), (30, 120), font, 1, (0, 0, 255), 2)
-            cv2.putText(img, 'Detection Failed: {}'.format(LaneDetector.FAIL_CODES[fail_code]), (30, 60), font, 1, (0, 0, 255), 2)
-            cv2.imwrite(os.path.join('test_images', 'test' + str(self.count) + '_failed.png'), img)
+        if fail_code > 0:
+            self.fail_count += 1
+            if self.debug:
+                cv2.putText(out_image, 'Detection Failed: {}'.format(LaneDetector.FAIL_CODES[fail_code]), (30, 120), font, 1, (0, 0, 255), 2)
+                cv2.putText(img, 'Detection Failed: {}'.format(LaneDetector.FAIL_CODES[fail_code]), (30, 60), font, 1, (0, 0, 255), 2)
+                cv2.imwrite(os.path.join('test_images', 'test' + str(self.count) + '_failed.png'), img)
 
         self.count += 1
 
@@ -55,6 +58,8 @@ class VideoProcessor:
         
         output_clip = input_clip.fl_image(self.process_frame)
         output_clip.write_videofile(output, audio = False)
+
+        print('Number of failed detection: {}'.format(self.fail_count))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Video processor')

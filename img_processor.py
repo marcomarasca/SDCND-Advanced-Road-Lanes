@@ -15,6 +15,7 @@ class ImageProcessor:
         # Gradient and color thresholding parameters
         self.sobel_kernel = 15
         self.grad_x_thresh = (15, 100) # Sobel x threshold
+        self.grad_y_thresh = (30, 100) # Sobel y threshold
         self.grad_dir_thresh = (0.7, 1.3) # Sobel direction range
         self.grad_l_thresh = (180, 255) # HSL, L channel threshold to filter gradient
 
@@ -29,8 +30,8 @@ class ImageProcessor:
         # bottom left, bottom right = (297, 658), (1024, 658)
         self.persp_src_left_line = (-0.6989619377, 864.8927335545) # Slope and intercept for left line
         self.persp_src_right_line = (0.6234567901, 19.58024693) # Slope and intercept for right line
-        self.persp_src_top_pct = 0.655 # Percentage from the top
-        self.persp_dst_x_pct = 0.25 # Destination offset percent
+        self.persp_src_top_pct = 0.645 # Percentage from the top
+        self.persp_dst_x_pct = 0.22 # Destination offset percent
         self.persp_dst_y_pct = 0.02
         self.persp_src = None
         self.persp_dst = None
@@ -150,10 +151,12 @@ class ImageProcessor:
         sobel_y = self._sobel(gray_img, sobel_kernel = self.sobel_kernel, orient = 'y')
 
         sobel_x_binary = self.sobel_abs_thresh(sobel_x, thresh = self.grad_x_thresh)
+        sobel_y_binary = self.sobel_abs_thresh(sobel_y, thresh = self.grad_y_thresh)
+
         sobel_dir_binary = self.sobel_dir_thresh(sobel_x, sobel_y, thresh = self.grad_dir_thresh)
 
         sobel_binary = np.zeros_like(sobel_x_binary)
-        sobel_binary[(sobel_x_binary == 1) & (sobel_dir_binary == 1) & (l_binary == 1)] = 1
+        sobel_binary[(sobel_x_binary == 1) & (sobel_y_binary == 1) & (sobel_dir_binary == 1) & (l_binary == 1)] = 1
         
         return sobel_binary
 
