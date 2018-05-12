@@ -20,20 +20,22 @@ class ImageProcessor:
         self.grad_dir_thresh = (0.7, 1.3) # Sobel direction range
         self.grad_v_thresh = (180, 255) # HSV, V channel threshold to filter gradient
 
-        self.r_thresh = (200, 255) # RGB, Red channel threshold
+        self.r_thresh = (195, 255) # RGB, Red channel threshold
         self.s_thresh = (100, 255) # HSL, S channel threshold
-        self.l_thresh = (200, 255) # HSL, L channel threshold
+        self.l_thresh = (195, 255) # HSL, L channel threshold
         self.b_thresh = (150, 255) # LAB, B channel threshold
         self.v_thresh = (140, 255) # HSV, V channel threshold
 
         # Perspective transformation parameters
-        # top left, top right = (585, 456), (700, 456)
-        # bottom left, bottom right = (297, 658), (1024, 658)
-        self.persp_src_left_line = (-0.6989619377, 864.8927335545) # Slope and intercept for left line
-        self.persp_src_right_line = (0.6234567901, 19.58024693) # Slope and intercept for right line
+        # slope = (y2 - y1) / (x2 - x1)
+        # intercept = y1 - slope * x1
+        # top left, top right = (570, 470), (722, 470)
+        # bottom left, bottom right = (220, 720), (1110, 720)
+        self.persp_src_left_line = (-0.7142857143, 877.142857146) # Slope and intercept for left line
+        self.persp_src_right_line = (0.6443298969, 4.793814441) # Slope and intercept for right line
         self.persp_src_top_pct = 0.645 # Percentage from the top
+        self.persp_src_bottom_pct = 0.02 # Percentage from bottom
         self.persp_dst_x_pct = 0.22 # Destination offset percent
-        self.persp_dst_y_pct = 0.02
         self.persp_src = None
         self.persp_dst = None
 
@@ -44,23 +46,27 @@ class ImageProcessor:
             cols = img.shape[1]
             rows = img.shape[0]
 
-            src_y_offset = rows * self.persp_src_top_pct
+            src_top_offset = rows * self.persp_src_top_pct
+            src_bottom_offset = rows * self.persp_src_bottom_pct
             left_slope, left_intercept = self.persp_src_left_line
             right_slope, right_intercept = self.persp_src_right_line
 
-            # Top left, Top right, Bottom right, Bottom left        
-            src = np.float32([[(src_y_offset - left_intercept) / left_slope, src_y_offset],
-                            [(src_y_offset - right_intercept) / right_slope, src_y_offset],
-                            [(rows - right_intercept) / right_slope, rows],
-                            [(rows - left_intercept) / left_slope, rows]])
+            top_left = [(src_top_offset - left_intercept) / left_slope, src_top_offset]
+            top_right = [(src_top_offset - right_intercept) / right_slope, src_top_offset]
+            bottom_left = [(rows - src_bottom_offset - left_intercept) / left_slope, rows - src_bottom_offset]
+            bottom_right = [(rows - src_bottom_offset - right_intercept) / right_slope, rows - src_bottom_offset]
+
+            #Top left, Top right, Bottom right, Bottom left        
+            src = np.float32([top_left, top_right, bottom_right, bottom_left])
 
             dst_x_offset = cols * self.persp_dst_x_pct
-            dst_y_offset = rows * self.persp_dst_y_pct
-
-            dst = np.float32([[dst_x_offset, 0], 
-                            [cols - dst_x_offset, 0], 
-                            [cols - dst_x_offset, rows + dst_y_offset],
-                            [dst_x_offset, rows + dst_y_offset]])
+    
+            top_left = [dst_x_offset, 0]
+            top_right = [cols - dst_x_offset, 0]
+            bottom_left = [dst_x_offset, rows]
+            bottom_right = [cols - dst_x_offset, rows]
+            
+            dst = np.float32([top_left, top_right, bottom_right, bottom_left])
                             
             self.persp_src = src
             self.persp_dst = dst

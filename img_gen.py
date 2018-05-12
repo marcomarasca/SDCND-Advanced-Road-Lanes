@@ -36,14 +36,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '--w_width',
         type=int,
-        default=40,
+        default=35,
         help='Sliding window width'
     )
 
     parser.add_argument(
         '--w_height',
         type=int,
-        default=80,
+        default=90,
         help='Sliding window height'
     )
 
@@ -66,6 +66,7 @@ if __name__ == '__main__':
 
     for img_file in tqdm(img_files, unit=' images', desc ='Image processing'):
 
+        print(img_file)
         input_img = cv2.imread(img_file)
 
         undistorted_img, thresholded_img, processed_img = img_processor.process_image(input_img)
@@ -94,7 +95,7 @@ if __name__ == '__main__':
         cv2.imwrite(out_file_prefix + '_persp_src.jpg', processed_src)
         cv2.imwrite(out_file_prefix + '_persp_dst.jpg', processed_dst)
 
-        lanes_centroids, curvature, deviation, failed = lane_tracker.detect_lanes(processed_img)
+        lanes_centroids, curvature, deviation, fail_code = lane_tracker.detect_lanes(processed_img)
         processed_img = lane_tracker.draw_windows(processed_img, lanes_centroids, blend = True)
         
         cv2.imwrite(out_file_prefix + '_windows.jpg', processed_img)
@@ -107,5 +108,10 @@ if __name__ == '__main__':
         font_color = (0, 255, 0)
         cv2.putText(lanes_img, 'Left Curvature: {:.1f}, Right Curvature: {:.1f}'.format(curvature[0], curvature[1]), (30, 60), font, 1, font_color, 2)
         cv2.putText(lanes_img, 'Center Offset: {:.2f} m'.format(deviation), (30, 90), font, 1, font_color, 2)
+
+        if fail_code > 0:
+            failed_text = 'Detection Failed: {}'.format(LaneDetector.FAIL_CODES[fail_code])
+            print(img_file, failed_text)
+            cv2.putText(lanes_img, failed_text, (30, 120), font, 1, (0, 0, 255), 2)
 
         cv2.imwrite(out_file_prefix + '_lanes.jpg', lanes_img)
