@@ -10,6 +10,9 @@ from lane_detector import LaneDetector
 from moviepy.editor import VideoFileClip
 
 class VideoProcessor:
+    """
+    Class used to process a video file and that produces an annotated version with the detected lanes.
+    """
 
     def __init__(self, calibration_data_file, smooth_frames = 5, debug = False, failed_frames_dir = 'failed_frames'):
         self.img_processor = ImageProcessor(calibration_data_file)
@@ -26,11 +29,11 @@ class VideoProcessor:
        
         undistorted_img, thresholded_img, warped_img = self.img_processor.process_image(img)
         
-        lanes_centroids, curvature, deviation, fail_code = self.lane_tracker.detect_lanes(warped_img)
+        _, polyfit, curvature, deviation, fail_code = self.lane_tracker.detect_lanes(warped_img)
         
         fill_color = (0, 255, 0) if fail_code == 0 else (0, 255, 255)
 
-        lane_img = self.lane_tracker.draw_lanes(undistorted_img, lanes_centroids, fill_color = fill_color)
+        lane_img = self.lane_tracker.draw_lanes(undistorted_img, polyfit, fill_color = fill_color)
         lane_img = self.img_processor.unwarp_image(lane_img)
 
         out_image = cv2.addWeighted(undistorted_img, 1.0, lane_img, 1.0, 0)
@@ -51,10 +54,9 @@ class VideoProcessor:
             if self.debug:
                 print(failed_text)
                 cv2.imwrite(os.path.join(self.failed_frames_dir, 'frame' + str(self.frame_count) + '_failed_' + str(fail_code) + '.png'), img)
+                cv2.imwrite(os.path.join(self.failed_frames_dir, 'frame' + str(self.frame_count) + '_failed_' + str(fail_code) + '_lanes.png'), out_image)
                 if self.last_frame is not None: # Saves also the previous frame for comparison
                     cv2.imwrite(os.path.join(self.failed_frames_dir, 'frame' + str(self.frame_count) + '_failed_' + str(fail_code) + '_prev.png'), self.last_frame)
-                if self.fail_count > 50:
-                    exit(0)
 
         self.frame_count += 1
         self.last_frame = img

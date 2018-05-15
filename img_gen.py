@@ -9,6 +9,10 @@ from tqdm import tqdm
 from img_processor import ImageProcessor
 from lane_detector import LaneDetector
 
+"""
+Script used to process a folder with images to test the pipeline
+"""
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Image processor')
 
@@ -36,14 +40,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '--w_width',
         type=int,
-        default=35,
+        default=30,
         help='Sliding window width'
     )
 
     parser.add_argument(
         '--w_height',
         type=int,
-        default=90,
+        default=80,
         help='Sliding window height'
     )
 
@@ -95,12 +99,12 @@ if __name__ == '__main__':
         cv2.imwrite(out_file_prefix + '_persp_src.jpg', processed_src)
         cv2.imwrite(out_file_prefix + '_persp_dst.jpg', processed_dst)
 
-        lanes_centroids, curvature, deviation, fail_code = lane_tracker.detect_lanes(processed_img)
-        processed_img = lane_tracker.draw_windows(processed_img, lanes_centroids, blend = True)
+        lanes_centroids, polyfit, curvature, deviation, fail_code = lane_tracker.detect_lanes(processed_img)
+        processed_img = lane_tracker.draw_windows(processed_img, lanes_centroids, polyfit, blend = True)
         
         cv2.imwrite(out_file_prefix + '_windows.jpg', processed_img)
 
-        lanes_img = lane_tracker.draw_lanes(input_img, lanes_centroids)
+        lanes_img = lane_tracker.draw_lanes(input_img, polyfit)
         lanes_img = img_processor.unwarp_image(lanes_img)
 
         lanes_img = cv2.addWeighted(undistorted_img, 1.0, lanes_img, 1.0, 0)
@@ -111,7 +115,7 @@ if __name__ == '__main__':
 
         if fail_code > 0:
             failed_text = 'Detection Failed: {}'.format(LaneDetector.FAIL_CODES[fail_code])
-            print(img_file, failed_text)
+            print(failed_text)
             cv2.putText(lanes_img, failed_text, (30, 120), font, 1, (0, 0, 255), 2)
 
         cv2.imwrite(out_file_prefix + '_lanes.jpg', lanes_img)

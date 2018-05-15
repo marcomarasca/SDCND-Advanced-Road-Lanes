@@ -4,6 +4,10 @@ import numpy as np
 import camera_calibration as cc
 
 class ImageProcessor:
+    """
+    Class used to process an image for the LaneDetector. Applies both color and gradient thresholding and produces a set of
+    images (undistored, thresholded and warped) that can be used for debugging.
+    """
 
     def __init__(self, calibration_data_file):
 
@@ -92,9 +96,8 @@ class ImageProcessor:
         img_shape = img.shape[1::-1]
 
         src, dst = self._warp_coordinates(img)
-        # Given src and dst points, calculate the perspective transform matrix
-        warp_m = cv2.getPerspectiveTransform(dst, src)
 
+        warp_m = cv2.getPerspectiveTransform(dst, src)
         unwarped = cv2.warpPerspective(img, warp_m, img_shape)
 
         return unwarped
@@ -105,9 +108,7 @@ class ImageProcessor:
 
         src, dst = self._warp_coordinates(img)
 
-        # Given src and dst points, calculate the perspective transform matrix
         warp_m = cv2.getPerspectiveTransform(src, dst)
-        # Warp the image using OpenCV warpPerspective()
         warped = cv2.warpPerspective(img, warp_m, img_shape)
 
         return warped
@@ -131,7 +132,7 @@ class ImageProcessor:
         # Rescale to 8 bit
         scale_factor = np.max(gradmag)/255 
         gradmag = (gradmag/scale_factor).astype(np.uint8) 
-        # Create a binary mask where mag thresholds are met
+
         binary_output = self._apply_thresh(gradmag, thresh)
         
         return binary_output
@@ -140,9 +141,10 @@ class ImageProcessor:
         # Take the absolute value of the x and y gradients
         abs_sobel_x = np.absolute(sobel_x)
         abs_sobel_y = np.absolute(sobel_y)
+
         # Calculate the direction of the gradient 
         abs_grad_dir = np.arctan2(abs_sobel_y, abs_sobel_x)
-        # Create a binary mask where direction thresholds are met
+
         binary_output = self._apply_thresh(abs_grad_dir, thresh)
        
         return binary_output
@@ -209,6 +211,10 @@ class ImageProcessor:
         return result
 
     def process_image(self, img):
+        """
+        Process the given image appling undistorsion from the camera calibration data, thresholds the result and then
+        warps the image for an bird-eye view of the road.
+        """
 
         undistorted_img = self.undistort_image(img)
 
