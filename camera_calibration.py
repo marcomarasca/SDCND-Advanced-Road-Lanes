@@ -5,6 +5,11 @@ import glob
 import os
 import argparse
 
+"""
+Script used to calibrate the camera from the images of a chessboard stored in a given folder. Saves the result
+into a pickle file.
+"""
+
 def calibrate_camera(
     file_path = os.path.join('camera_cal', 'calibration*.jpg'),
     board_shape = (9, 6),
