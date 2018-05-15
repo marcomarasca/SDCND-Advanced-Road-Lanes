@@ -1,4 +1,7 @@
-**Advanced Lane Finding Project**
+# **Advanced Lane Finding Project**
+
+[![Advanced Lane Finding](http://img.youtube.com/vi/H00KJRCV5dA/0.jpg)](https://www.youtube.com/watch?v=H00KJRCV5dA "Advanced Lane Detection Pipeline")
+
 
 In this project we built a pipeline to detect road lanes in images and video frames. The project consisted in the following steps: 
 
@@ -14,9 +17,8 @@ In this project we built a pipeline to detect road lanes in images and video fra
 [//]: # (Image References)
 
 [cal_input]: ./camera_cal/calibration2.jpg "Image used for calibration"
-[cal_corners]: ./output_images/calibration/calibration2_corners.jpg "Detected corners"
-[cal_undistorted]: ./output_images/calibration/calibration2_corners_undistorted.jpg "Undistorsion result"
 
+[p_cal]: ./output_images/pipeline_calibration.jpg "Camera calibration"
 [p_undistorted]: ./output_images/pipeline_undistorted.jpg "Undistorted image"
 [p_color_thresh]: ./output_images/pipeline_color.jpg "Color thresholded image"
 [p_gradient_thresh]: ./output_images/pipeline_gradient.jpg "Gradient thresholded image"
@@ -46,13 +48,9 @@ In the following we can see an example of one of the input calibration images:
 
 ![alt text][cal_input]
 
-The result of the corners detections from open cv:
+And the result of the corners detections and the undistorsion on the input image using the coefficients computed from the `calibrationCamera()` function:
 
-![alt text][cal_corners]
-
-And finally the undistorted image using the coefficients computed from the `calibrationCamera()` function:
-
-![alt text][cal_undistorted]
+![alt text][p_cal]
 
 ### Pipeline (single images)
 
@@ -70,19 +68,19 @@ Next step in the pipeline producing a binary image that tries to underline the r
 
 In particular I split my thresholding between color and gradient thresholding, the former can be found in the [img_processor.py](./img_processor.py) within the `color_thresh()` function while the latter is performed in the `gradient_thresh()` function.
 
-Analyzing the various color spaces I noticed that using a combination of RGB, HSL, LAB and HSV I could already extract most of the needed information:
+Analyzing the various color spaces I noticed that using a combination of RGB, HLS, LAB and HSV I could already extract most of the needed information:
 
 * **yellow lane**: A combination of the B channel from the LAB space and the V channel from HSV (to filter the brightness)
-* **white lane**: A combination of the Red channel from RGB and the L channel from HSL (to filter out darker spots)
-* **generic lane**: A combination of the S channel from HSL and the V channel from HSV gave good results for extracting both lanes
+* **white lane**: A combination of the Red channel from RGB and the L channel from HLS (to filter out darker spots)
+* **generic lane**: A combination of the S channel from HLS and the V channel from HSV gave good results for extracting both lanes
 
 The various channels are using the following thresholds for their values:
 
-* **R**GB: (195, 255)
-* H**S**L: (100, 255)
-* HS**L**: (195, 255)
-* LA**B**: (150, 255)
-* HS**V**: (140, 255)
+* (**R**)GB: (195, 255)
+* HL(**S**): (100, 255)
+* H(**L**)S: (195, 255)
+* LA(**B**): (150, 255)
+* HS(**V**): (140, 255)
 
 An example of the result is as follows:
 
@@ -99,7 +97,7 @@ Basically relying on the magnitude and the v channel from HSV to filter out nois
 * Y: (25, 255)
 * Magnitude: (40, 255)
 * Direction: (0.7, 1.3)
-* HS**V**: (180, 255)
+* HS(**V**): (180, 255)
 
 An example of the result from the gradient thresholding is as follows:
 
@@ -162,7 +160,9 @@ The [ImageProcessor](./img_processor.py) implements an `unwarp()` function that 
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video_processed.mp4). The pipeline works reasonably well on the project video, while it fails for the [challenge video](./challenge_video_processed.mp4) mostly due to too strict thresholds I chose for the color and gradient thresholding.
+![alt text](./output_images/pipeline.gif)
+
+Here's a [link to my video result](./output_videos/project_video_processed.mp4). An additional video with the breakdown of the pipeline can be found [here](./output_videos/project_video_pipeline.mp4). The pipeline works reasonably well on the project video, while it fails for the [challenge video](./output_videos/challenge_video_processed.mp4) mostly due to too strict thresholds I chose for the color and gradient thresholding.
 
 ---
 
@@ -170,4 +170,4 @@ Here's a [link to my video result](./project_video_processed.mp4). The pipeline 
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-This was a challenging project mostly due to the amount of manual trial and error involved. The color and gradient thresholding were the most time consuming part as finding a general solution for all the situation "hard-coding" thresholds is probably not the best approach. The light conditions may change drastically and so profiles may be built for different scenarios as well as a detection mechanism to apply such profiles. The camera shaking is also a problem, a gimble may be an idea or additional feedback from external sensors in order to adjust the parameters at run time. The pipeline as it is I'd say it's quite limited and makes several assumptions, but due to time constraint I decided to stop to a working implementation. Several additional sanity checks may be implemented that could help in having a smoother and more robust result but my guess is again that external feedback should help rather than having a black box that works with images only.
+This was a challenging project mostly due to the amount of manual trial and error involved. The color and gradient thresholding were the most time consuming part as finding a general solution for all the situation "hard-coding" thresholds is probably not the best approach. The light conditions may change drastically and so profiles may be built for different scenarios as well as a detection mechanism to apply such profiles. The camera shaking is also a problem, a gimble may be an idea or additional feedback from external sensors in order to adjust the parameters at run time. The pipeline as it is I'd say it's quite limited and makes several assumptions, but due to time constraint I decided to stop to a working implementation. Several additional sanity checks may be implemented that could help in having a smoother and more robust result but my guess is again that external feedback should help rather than having a black box that works with images only. Another point where the pipeline may have issues is when the lane is lost as I didn't implement a recover or a frame reset mechanism here: ideally after a few consequent failing detections the checks on previous frames should be stopped and the window search should start from scratch.

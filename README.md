@@ -1,39 +1,98 @@
-## Advanced Lane Finding
+# Advanced Lane Finding
 [![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
 
+[//]: # (Image References)
 
-In this project, your goal is to write a software pipeline to identify the lane boundaries in a video, but the main output or product we want you to create is a detailed writeup of the project.  Check out the [writeup template](https://github.com/udacity/CarND-Advanced-Lane-Lines/blob/master/writeup_template.md) for this project and use it as a starting point for creating your own writeup.  
+[cal_input]: ./camera_cal/calibration2.jpg "Image used for calibration"
 
-Creating a great writeup:
+[p_cal]: ./output_images/pipeline_calibration.jpg "Camera calibration"
+[p_undistorted]: ./output_images/pipeline_undistorted.jpg "Undistorted image"
+[p_color_thresh]: ./output_images/pipeline_color.jpg "Color thresholded image"
+[p_gradient_thresh]: ./output_images/pipeline_gradient.jpg "Gradient thresholded image"
+[p_thresh]: ./output_images/pipeline_thresholded.jpg "Final thresholded image"
+[p_src_dst]: ./output_images/pipeline_src_dst.jpg "Source and destination of the warping"
+[p_warped]: ./output_images/pipeline_warped.jpg "Thresholded and warped image"
+[p_lanes]: ./output_images/pipeline_lanes.jpg "Sliding windows and lanes detection"
+
+[![Advanced Lane Finding](http://img.youtube.com/vi/H00KJRCV5dA/0.jpg)](https://www.youtube.com/watch?v=H00KJRCV5dA "Advanced Lane Detection Pipeline")
+
+Overview
 ---
-A great writeup should include the rubric points as well as your description of how you addressed each point.  You should include a detailed description of the code used in each step (with line-number references and code snippets where necessary), and links to other supporting documents or external references.  You should include images in your writeup to demonstrate how your code works with examples.  
+This repository contains an implementation of a road lanes detection pipeline that can be applied to images or videos and that uses various computer visions techniques to extract the polynomials of the road lanes from an image.
 
-All that said, please be concise!  We're not looking for you to write a book here, just a brief description of how you passed each rubric point, and references to the relevant code :). 
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup.
-
-The Project
----
-
-The goals / steps of this project are the following:
+The project contains various python scripts that allow to:
 
 * Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
 * Apply a distortion correction to raw images.
-* Use color transforms, gradients, etc., to create a thresholded binary image.
-* Apply a perspective transform to rectify binary image ("birds-eye view").
+* Create a thresholded binary image.
+* Apply a perspective transform to rectify binary image to a "birds-eye view".
 * Detect lane pixels and fit to find the lane boundary.
 * Determine the curvature of the lane and vehicle position with respect to center.
-* Warp the detected lane boundaries back onto the original image.
+* Warp the detected lanes boundaries back onto the original image.
 * Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
 
-The images for camera calibration are stored in the folder called `camera_cal`.  The images in `test_images` are for testing your pipeline on single frames.  If you want to extract more test images from the videos, you can simply use an image writing method like `cv2.imwrite()`, i.e., you can read the video in frame by frame as usual, and for frames you want to save for later you can write to an image file.  
+Getting Started
+---
 
-To help the reviewer examine your work, please save examples of the output from each stage of your pipeline in the folder called `output_images`, and include a description in your writeup for the project of what each image shows.    The video called `project_video.mp4` is the video your pipeline should work well on.  
+The project uses [OpenCV](https://opencv.org/) for most of the transformations, make sure that [ffmpeg](https://www.ffmpeg.org/) is setup in order to process the video.
 
-The `challenge_video.mp4` video is an extra (and optional) challenge for you if you want to test your pipeline under somewhat trickier conditions.  The `harder_challenge.mp4` video is another optional challenge and is brutal!
+The project is split in various python scripts, in particular it comes with the following:
 
-If you're feeling ambitious (again, totally optional though), don't stop there!  We encourage you to go out and take video of your own, calibrate your camera and show us how you would implement this project from scratch!
+#### [Camera Calibration](./camera_calibration.py)
 
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
+The script is used to calibrate a camera to fix distorsions, the idea is to capture a set of images of a chessboard from different perspectives so that it can be used to detect the corners and compute the coefficients to correct the distorsion in the images. The coefficients are saved in an output pickle file.
 
+The script can be run taking in input a folder containing calibration images using 
+
+```bash
+python camera_calibration.py --parameter_name=parameter_value
+```
+
+The supported parameters are as follows:
+
+* **filepath** The path (pattern) where to find the calbration images; defaults to *camera_cal*
+* **output** The output pickle file that will contain the distorsion coefficients; defaults to *camera_cal/calibration.p*
+* **corners_folder** Where to save the intermediate images with the detected corners; defaults to *output_images/calibration*
+* **rows** The number of rows in the chessboard images; defaults to *6*
+* **cols** The number of columns in the chessboard images; defaults to *9*
+
+![alt text][p_cal]
+
+#### [Image Processing](./img_gen.py)
+
+The script is used to run the pipeline for a set of images contained into an input folder, the output will be a set of images, one for each step of the pipeline. The script can be run as follows:
+
+```bash
+python img_gen.py --parameter_name=parameter_value
+```
+
+Where the supported parameters are as follows:
+
+* **dir** The path (pattern) where to find the images to process; defaults to *test_images*
+* **output** The folder where to save the output images; defaults to *output_images*
+* **calibration_data_file** The path of the pickle file containing the calibration data for the camera; defaults to *camera_cal/calibration.p*
+* **w_width** The width of the windows used for the lane search
+* **w_height** The height of the windows used for the lane search
+* **w_margin** The margin of the windows used for the lane search
+
+![alt text][p_lanes]
+
+#### [Video Processing](./video_processor.py)
+
+The script is used to process an input video running the whole pipeline and outputting an annotated version of the video with the detected lanes. It can be run using:
+
+```bash
+python video_processor.py path_to_video.mp4 --parameter_name=parameter_value
+```
+
+Where the supported parameters are:
+
+* **calibration_data_file** The path of the pickle file containing the calibration data for the camera; defaults to *camera_cal/calibration.p*
+* **failed_frames_dir** The path to the folder where to save the frames where the detection failed; defaults to *failed_frames*
+* **smooth** The number of frames to use for smoothing; defaults to *5*
+* **start** The start of the video clip for trimming
+* **end** The end of the video clip for trimming
+* **split** True if a video for each stage of the pipeline should be output, false if only the final video should be saved; defaults to false
+* **debug** True if additional debugging information should be displayed; defaults to false
+
+![alt text](./output_images/pipeline.gif)
