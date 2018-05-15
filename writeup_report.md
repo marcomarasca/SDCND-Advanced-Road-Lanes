@@ -21,7 +21,9 @@ In this project we built a pipeline to detect road lanes in images and video fra
 [p_cal]: ./output_images/pipeline_calibration.jpg "Camera calibration"
 [p_undistorted]: ./output_images/pipeline_undistorted.jpg "Undistorted image"
 [p_color_thresh]: ./output_images/pipeline_color.jpg "Color thresholded image"
+[p_color_thresh_split]: ./output_images/pipeline_color_split.jpg "Color thresholding"
 [p_gradient_thresh]: ./output_images/pipeline_gradient.jpg "Gradient thresholded image"
+[p_gradient_thresh_split]: ./output_images/pipeline_gradient_split.jpg "Gradient thresholding"
 [p_thresh]: ./output_images/pipeline_thresholded.jpg "Final thresholded image"
 [p_src_dst]: ./output_images/pipeline_src_dst.jpg "Source and destination of the warping"
 [p_warped]: ./output_images/pipeline_warped.jpg "Thresholded and warped image"
@@ -86,6 +88,10 @@ An example of the result is as follows:
 
 ![alt text][p_color_thresh]
 
+With the various channels thresholding:
+
+![alt text][p_color_thresh_split]
+
 I then proceeded using various combination of gradient thresholding, in particular I use complex mix of absolute gradient on both the x and y, the direction and the magnitude of the gradient combined with a filter on the V channel of the HSV color space. This provides relatively good results on a vast amount of different situations, providing additional information where the color thresholding was failing. I ended up with the following combination:
 
 ((sobel_x_binary & sobel_y_binary) | sobel_dir_binary) & sobel_mag_binary == 1 & v_binary == 1
@@ -103,7 +109,11 @@ An example of the result from the gradient thresholding is as follows:
 
 ![alt text][p_gradient_thresh]
 
-The two thresholds are then (or) combined into the final thresholded image:
+With the various intermediate thresholds:
+
+![alt text][p_gradient_thresh_split]
+
+The color and gradient thresholds are then (or) combined together into the final thresholded image:
 
 ![alt text][p_thresh]
 
